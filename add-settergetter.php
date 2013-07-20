@@ -9,11 +9,21 @@ set_exception_handler(function($exception) {
 
 extract(parseArgv(), EXTR_SKIP);
 
-loadFile($fileName, $topPathName);
+validateFile($fileName, $topPathName);
+
+copy($fileName, $fileName . '.bak');
+$string = file_get_contents($fileName);
+$string = preg_replace('!class\s+([^ ]+)\s+extends\s+[^{]+$!m', 'class $1', $string);
+$string = preg_replace('!class\s+([^ ]+)\s+implements\s+[^{]+$!m', 'class $1', $string);
+file_put_contents($fileName, $string);
+
+require $fileName;
 
 $class = new \ReflectionClass(
     preg_replace(array("!^.+/{$topPathName}!", '!/!', '!\.php!'), array('', '\\', ''), $fileName)
 );
+
+copy($fileName . '.bak', $fileName);
 
 outputFile(
     $fileName,
@@ -55,7 +65,7 @@ function parseArgv()
  * @param string $fileName
  * @param string $topPathName
  */
-function loadFile($fileName, $topPathName)
+function validateFile($fileName, $topPathName)
 {
     if (!$fileName) {
         die(
@@ -72,9 +82,6 @@ function loadFile($fileName, $topPathName)
     if (!preg_match("!/{$topPathName}/!", $fileName)) {
         die('Error: to level path name does not exist.' . PHP_EOL);
     }
-
-    copy($fileName, $fileName . '.bak');
-    require $fileName;
 }
 
 /**
