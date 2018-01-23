@@ -15,13 +15,15 @@ copy($fileName, $fileName . '.bak');
 $string = file_get_contents($fileName);
 $string = preg_replace('!class\s+([^ ]+)\s+extends\s+[^{]+$!m', 'class $1', $string);
 $string = preg_replace('!class\s+([^ ]+)\s+implements\s+[^{]+$!m', 'class $1', $string);
+$string = preg_replace('!use\s+([^ ]+)$!m', '// use $1', $string);
+
 file_put_contents($fileName, $string);
 
 require $fileName;
 
-$class = new \ReflectionClass(
-    preg_replace(array("!^.+/{$topPathName}!", '!/!', '!\.php!'), array('', '\\', ''), $fileName)
-);
+$className = preg_replace('!/!', '\\', $className);
+
+$class = new \ReflectionClass($className);
 
 copy($fileName . '.bak', $fileName);
 
@@ -36,13 +38,27 @@ outputFile(
  */
 function parseArgv()
 {
+    if (isset($_SERVER['argv'][1])) {
+        if (in_array($_SERVER['argv'][1], array('-h', '--h', '--help'))) {
+            print '' . PHP_EOL;
+            print '[command help]' . PHP_EOL;
+            print ' php add-settergetter.php [full path] [class name (with slash)]' . PHP_EOL;
+            die();
+        }
+    }
+
     $fileName = null;
     $topPathName = 'src';
+    $className = '';
 
     unset($_SERVER['argv'][0]);
     if (isset($_SERVER['argv'][1])) {
         $fileName = $_SERVER['argv'][1];
         unset($_SERVER['argv'][1]);
+    }
+    if (isset($_SERVER['argv'][2])) {
+        $className = $_SERVER['argv'][2];
+        unset($_SERVER['argv'][2]);
     }
 
     $specifiedProperties = array();
@@ -58,6 +74,7 @@ function parseArgv()
         'fileName' => $fileName,
         'topPathName' => $topPathName,
         'specifiedProperties' => $specifiedProperties,
+        'className' => $className,
     );
 }
 
@@ -118,11 +135,15 @@ function generateMethodString($fileName, \ReflectionClass $class, array $specifi
         } else {
             $methodString .= "
     /**
+     * Set {$target}.
+     *
      * @param {$type} \${$target}
      */
     public function set{$targetWithUcfirst}({$typeForParameter}\${$target})
     {
         \$this->{$target} = \${$target};
+
+        return \$this;
     }
 ";
         }
@@ -132,6 +153,8 @@ function generateMethodString($fileName, \ReflectionClass $class, array $specifi
         } else {
             $methodString .= "
     /**
+     * Get {$target}.
+     *
      * @return {$type}
      */
     public function get{$targetWithUcfirst}()
